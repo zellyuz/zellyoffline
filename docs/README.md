@@ -12,6 +12,7 @@ Kod tahlili asosida tuzilgan (2026-08-07).
 | [04_ROADMAP.md](04_ROADMAP.md) | Global standartlarga bosqichma-bosqich o'tish rejasi |
 | [05_MOBIL_FILIAL_SYNC.md](05_MOBIL_FILIAL_SYNC.md) | **Mobil ilova · ko'p filiallik · online/offline sync** — arxitektura va Roadmap ([taklif.md](taklif.md) ga javob) |
 | [06_ADMIN_APP_API.md](06_ADMIN_APP_API.md) | **Admin mobil ilovasi — API spetsifikatsiyasi**: ekran→endpoint xaritasi, yetishmayotgan endpoint'lar, MVP bosqichlari |
+| [07_ADMIN_APP_TZ.md](07_ADMIN_APP_TZ.md) | **Admin mobil ilovasi — texnik topshiriq (TZ)**: WebView arxitekturasi, native qobiq talablari, ekranlar, qabul mezonlari |
 | [ombor.md](ombor.md) | Omborxona moduli — asl g'oya (foydalanuvchi yozgan) |
 | [ombor_tahlil.md](ombor_tahlil.md) | Omborxona modulining chuqur tahlili |
 | [ombor_final.md](ombor_final.md) | **Omborxona — YAKUNIY, kodga tayyor spetsifikatsiya** (DB + oqim + refaktor) |
