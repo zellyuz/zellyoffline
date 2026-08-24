@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../database_helper.dart';
+import 'relay_service.dart';
 
 enum TunnelStatus { idle, starting, connected, noExe }
 
@@ -76,12 +77,32 @@ class TunnelService extends ChangeNotifier {
     notifyListeners();
     debugPrint('[Tunnel] URL topildi: $_tunnelUrl');
 
+    // Relay yoqilgan bo'lsa, ishga tushish xabarini U yuboradi — uning
+    // manzili barqaror. Ikkalasi yuborsa foydalanuvchi ikkita xabar oladi
+    // va qaysi tugma "to'g'ri" ekani noaniq bo'lib qoladi.
+    if (RelayService.instance.isEnabled) {
+      debugPrint('[Tunnel] Relay yoqilgan — Telegram xabarini relay yuboradi');
+      return;
+    }
+
     if (_botToken != null && _botToken!.isNotEmpty &&
         _chatId   != null && _chatId!.isNotEmpty) {
       _sendTelegram('$_tunnelUrl/reports/view');
     } else {
       debugPrint('[Tunnel] Telegram sozlanmagan');
     }
+  }
+
+  /// Boshqa xizmat (masalan [RelayService]) o'z manzili bilan "server ishga
+  /// tushdi" xabarini yuborishi uchun. Bot token/chat ID shu yerda o'qiladi.
+  Future<void> notifyServerStarted(String webAppUrl) async {
+    await _loadCredentials();
+    if (_botToken == null || _botToken!.isEmpty ||
+        _chatId == null || _chatId!.isEmpty) {
+      debugPrint('[Tunnel] Telegram sozlanmagan');
+      return;
+    }
+    await _sendTelegram(webAppUrl);
   }
 
   Future<void> _sendTelegram(String webAppUrl) async {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../core/services/relay_service.dart';
 import '../../providers/developer_provider.dart';
 import '../../data/repositories/developer_repository.dart';
 import '../settings/telegram_settings_screen.dart';
@@ -103,6 +104,8 @@ class _DeveloperMgmtScreenState extends State<DeveloperMgmtScreen> {
                 children: [
                   _buildTelegramCard(context, theme),
                   const SizedBox(height: 20),
+                  _buildRelayCard(theme),
+                  const SizedBox(height: 20),
                   _buildDbInfoCard(theme),
                   const SizedBox(height: 20),
                   _buildActionsRow(context, theme),
@@ -126,6 +129,210 @@ class _DeveloperMgmtScreenState extends State<DeveloperMgmtScreen> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const TelegramSettingsScreen()),
+      ),
+    );
+  }
+
+  // ─── Tashqi domen (relay) ────────────────────────────────────────────────
+  //
+  // Cloudflare tunneli har ishga tushishda YANGI manzil beradi — Telegram'dagi
+  // eski "Hisobot Paneli" tugmalari o'lik bo'lib qoladi. Bu yerda kiritilgan
+  // domen esa o'zgarmaydi: https://<domen>/reports/view
+  Widget _buildRelayCard(ThemeData t) {
+    final relay = RelayService.instance;
+
+    return ListenableBuilder(
+      listenable: relay,
+      builder: (context, _) {
+        final (color, icon, text) = switch (relay.status) {
+          RelayStatus.connected =>
+            (const Color(0xFF16A34A), Icons.cloud_done_rounded, 'Ulangan'),
+          RelayStatus.starting =>
+            (const Color(0xFFF59E0B), Icons.cloud_sync_rounded, 'Ulanmoqda…'),
+          RelayStatus.error => (
+              const Color(0xFFDC2626),
+              Icons.cloud_off_rounded,
+              relay.lastError ?? 'Xato'
+            ),
+          RelayStatus.noExe => (
+              const Color(0xFFDC2626),
+              Icons.error_outline_rounded,
+              'frpc.exe topilmadi'
+            ),
+          RelayStatus.notConfigured => (
+              const Color(0xFFF59E0B),
+              Icons.settings_rounded,
+              relay.lastError ?? 'Sozlanmagan'
+            ),
+          RelayStatus.idle =>
+            (t.disabledColor, Icons.cloud_outlined, 'O\'chirilgan'),
+        };
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Icon(icon, size: 20, color: color),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Tashqi domen (relay)',
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      Text(text,
+                          style: TextStyle(fontSize: 12, color: color)),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _openRelayDialog,
+                  icon: const Icon(Icons.edit_rounded, size: 16),
+                  label: const Text('Sozlash'),
+                ),
+              ]),
+              if (relay.publicUrl != null) ...[
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: () {
+                    Clipboard.setData(
+                        ClipboardData(text: relay.reportsUrl ?? ''));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Havola nusxa olindi')),
+                    );
+                  },
+                  child: Row(children: [
+                    const Icon(Icons.link_rounded, size: 15),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        relay.reportsUrl ?? '',
+                        style: const TextStyle(
+                            fontSize: 12, fontFamily: 'monospace'),
+                      ),
+                    ),
+                    const Icon(Icons.copy_rounded, size: 14),
+                  ]),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openRelayDialog() async {
+    final relay = RelayService.instance;
+    final cfg = await relay.loadConfig();
+    if (!mounted) return;
+
+    final domainCtrl =
+        TextEditingController(text: cfg[RelayService.kDomain]);
+    final serverCtrl =
+        TextEditingController(text: cfg[RelayService.kServer]);
+    final tokenCtrl = TextEditingController(text: cfg[RelayService.kToken]);
+    var enabled = cfg[RelayService.kEnabled] == '1';
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Tashqi domen (relay)'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Bu domen orqali hisobot paneli va mobil ilova '
+                    'internetdan ochiladi. Manzil o\'zgarmaydi — '
+                    'Telegram tugmalari doim ishlaydi.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: domainCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Domen',
+                      hintText: 'mehmon.zelly.uz',
+                      helperText: 'Har kassada BOSHQA bo\'lishi shart',
+                      prefixText: 'https://',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: serverCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Relay server',
+                      hintText: '5.104.108.235:7000',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: tokenCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Token',
+                      helperText: 'Serverdagi /etc/frp/token',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Yoqilgan'),
+                    subtitle: const Text(
+                      'O\'chirilsa Cloudflare tunneli ishlatiladi',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    value: enabled,
+                    onChanged: (v) => setLocal(() => enabled = v),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Bekor qilish'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Saqlash va ulash'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true) return;
+
+    await relay.saveConfig(
+      domain: domainCtrl.text,
+      server: serverCtrl.text,
+      token: tokenCtrl.text,
+      enabled: enabled,
+    );
+    await relay.restart();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(relay.isConnected
+            ? 'Ulandi: ${relay.publicUrl}'
+            : 'Saqlandi — ulanish holati kartada ko\'rinadi'),
       ),
     );
   }

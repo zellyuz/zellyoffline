@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../database_helper.dart';
 import '../utils/price_formatter.dart';
+import 'relay_service.dart';
 import 'tunnel_service.dart';
 
 class TelegramBotService {
@@ -258,13 +259,18 @@ class TelegramBotService {
   }
 
   List<List<Map<String, dynamic>>> _mainKb() {
-    final tunnelUrl = TunnelService.instance.tunnelUrl;
+    // Barqaror domen ustunroq: Cloudflare URL'i har qayta ishga tushishda
+    // o'zgaradi va eski xabarlardagi tugmalar o'lik bo'lib qoladi.
+    final reportsUrl = RelayService.instance.reportsUrl ??
+        (TunnelService.instance.tunnelUrl == null
+            ? null
+            : '${TunnelService.instance.tunnelUrl}/reports/view');
     return [
-      if (tunnelUrl != null)
+      if (reportsUrl != null)
         [
           {
             'text': '📊 Hisobot Paneli',
-            'web_app': {'url': '$tunnelUrl/reports/view'},
+            'web_app': {'url': reportsUrl},
           }
         ],
       [

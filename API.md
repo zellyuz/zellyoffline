@@ -1,7 +1,8 @@
 # Zelly POS — API hujjati
 
-> **Versiya:** 2.0 · **Oxirgi yangilanish:** 2026-08-18
-> **Manba:** `lib/core/server/api_server.dart` (59 endpoint) va
+> **Versiya:** 2.1 · **Oxirgi yangilanish:** 2026-08-20
+> **Manba:** `lib/core/server/routes/` (endpoint'lar, domen bo'yicha
+> modullarga bo'lingan), `lib/core/server/api_server.dart` (yig'uvchi) va
 > `lib/core/server/auth_token_service.dart`.
 >
 > Bu hujjat kafedagi Zelly POS serveriga ulanadigan mobil (ofitsiant) va veb
@@ -39,6 +40,34 @@ Barcha javoblar `application/json; charset=utf-8`. Pul qiymatlari — `double`
 
 Server barcha manbalarga ruxsat beradi (`Access-Control-Allow-Origin: *`),
 `OPTIONS` preflight so'rovlari qo'llab-quvvatlanadi.
+
+### Sahifalash (pagination)
+
+Ro'yxat qaytaradigan endpoint'lar `?limit` va `?offset` ni qabul qiladi.
+Sahifalash **ixtiyoriy** — javob shakli so'rovga qarab o'zgaradi:
+
+| So'rov | Javob |
+|---|---|
+| `GET /orders` | `[ {...}, {...} ]` — butun massiv (eski shakl) |
+| `GET /orders?limit=50` | `{ "data": [...], "meta": {...} }` |
+
+```json
+{
+  "data": [ { "id": "1712345678901", "grand_total": 203500.0 } ],
+  "meta": { "total": 1240, "limit": 50, "offset": 0, "has_more": true }
+}
+```
+
+- `limit` — standart `50`, eng katta **`200`** (kattaroq so'ralsa 200 ga
+  tushiriladi).
+- `offset` — standart `0`.
+- `total` — filtrga mos **umumiy** son (sahifalashsiz).
+
+> **Mobil ilova doim `?limit` yuborsin.** Ikki shakl orqaga muvofiqlik uchun:
+> desktop mijoz (`client` rejimi) yalang'och massiv kutadi.
+
+Qo'llab-quvvatlaydigan endpoint'lar: `/orders`, `/reports/orders`,
+`/transactions`, `/customers`, `/expenses`, `/inventory/movements`.
 
 ---
 
@@ -184,7 +213,9 @@ Ofitsiant tokeni bilan quyidagi yo'llarga kirish **`403`** beradi. Bular
 biznes uchun maxfiy ma'lumotlar:
 
 ```
-/reports/*   (/reports/view dan tashqari)
+/reports/*     (/reports/view dan tashqari)
+/admin/*       (dashboard, smena holati)
+/inventory/*   (ombor qoldig'i va harakatlari)
 /users, /users/<id>
 /expenses, /expense_categories
 /transactions
@@ -497,7 +528,158 @@ Umumiy filtr parametrlari: `?start=2026-08-01&end=2026-08-18`.
 
 ---
 
-### 5.8. ⚙️ Sozlamalar
+### 5.8. 📱 Admin ilovasi — 🔒 faqat admin/kassir
+
+Bu bo'lim admin mobil ilovasi uchun qo'shilgan (v2.1). `/reports/*` hisobot
+ekranlariga mo'ljallangan — har biri bitta jadval uchun. Telefonning bosh
+ekraniga esa bitta so'rovda hamma narsa kerak.
+
+| Metod | Yo'l | Ta'rif |
+|---|---|---|
+| `GET` | `/admin/dashboard` | **Bosh ekran** — bitta so'rovda hamma narsa |
+| `GET` | `/admin/shift/current` | Joriy smena va kassa holati |
+| `GET` | `/inventory/stock` | Ombor qoldig'i |
+| `GET` | `/inventory/movements` | Ombor harakatlari tarixi |
+| `GET` | `/orders` | Buyurtmalar ro'yxati (ochiq + to'langan) |
+
+#### `GET /admin/dashboard`
+
+Kun chegarasi `settings.day_reset_time` dan olinadi — kafening "kuni" yarim
+tunda tugamasligi mumkin.
+
+```json
+{
+  "period": { "start": "2026-08-20T00:00:00.000", "end": "2026-08-21T00:00:00.000" },
+  "today": {
+    "orders": 42,
+    "revenue": 5400000.0,
+    "avg_check": 128571.4,
+    "payments": { "cash": 3100000.0, "card": 2300000.0, "terminal": 0.0,
+                  "debt": 0.0, "bonus": 0.0, "transfer": 0.0 }
+  },
+  "yesterday": { "orders": 38, "revenue": 4900000.0, "avg_check": 128947.3,
+                 "payments": { } },
+  "tables": { "total": 24, "busy": 7, "bill_requested": 2 },
+  "open_orders": { "count": 7, "total": 890000.0 },
+  "top_products": [ { "name": "Osh (Palov)", "qty": 24.0, "revenue": 840000.0 } ],
+  "shift": {
+    "id": 108,
+    "opened_at": "2026-08-20T09:00:00.000",
+    "opening_cash": 500000.0,
+    "expected_cash": 3600000.0,
+    "total_sales": 5400000.0,
+    "total_expenses": 120000.0
+  },
+  "inventory": { "enabled": true, "low_stock": 3 }
+}
+```
+
+- `shift` — ochiq smena bo'lmasa `null`.
+- `yesterday` — o'sish/pasayishni ko'rsatish uchun (bir xil tuzilma).
+- `payments` — `order_payments` dan, ya'ni **bo'lingan to'lov** (yarmi naqd,
+  yarmi karta) to'g'ri hisoblanadi.
+
+#### `GET /admin/shift/current`
+
+Ochiq smena bo'lmasa: `{ "open": false }`. Bo'lsa:
+
+```json
+{
+  "open": true,
+  "shift": { "id": 108, "opened_at": "...", "opened_by": 1,
+             "opened_by_name": "Admin", "opening_cash": 500000.0,
+             "order_count": 42 },
+  "summary": {
+    "cash": 3100000.0, "card": 2300000.0, "terminal": 0.0,
+    "debt": 0.0, "bonus": 0.0, "transfer": 0.0,
+    "total_sales": 5400000.0,
+    "in_movements": 0.0, "out_movements": 120000.0,
+    "expected_cash": 3480000.0,
+    "discount": 45000.0, "expenses": 120000.0, "net_profit": 5280000.0
+  }
+}
+```
+
+`expected_cash` — kassada bo'lishi kerak bo'lgan naqd:
+`ochilish + naqd savdo + kirim − chiqim`.
+
+#### `GET /orders`
+
+`/reports/orders` faqat **to'langan** buyurtmalarni beradi. Bu endpoint esa
+ochiqlarini ham — ya'ni "hozir zalda nima bo'lyapti".
+
+**Filtrlar:** `?status` (`0` ochiq, `1` to'langan, `2` bekor), `?waiter_id`,
+`?table_id`, `?location_id`, `?order_type`, `?start`, `?end`,
+`?limit`, `?offset`.
+
+Berilmasa — bekor qilinganlardan tashqari hammasi.
+
+```json
+[
+  {
+    "id": "1712345678901",
+    "status": 0,
+    "grand_total": 185000.0,
+    "table_name": "Stol #1",
+    "location_name": "Yozgi ayvon",
+    "waiter_name": "Aziz",
+    "item_count": 4,
+    "created_at": "2026-08-20T13:05:00.000"
+  }
+]
+```
+
+> Bu yagona admin endpoint bo'lib, **ofitsiantga ham ochiq** — lekin u faqat
+> o'z buyurtmalarini ko'radi. `?waiter_id` yuborsa ham e'tiborga olinmaydi:
+> server ID ni tokendan oladi.
+
+#### `GET /inventory/stock`
+
+**Filtrlar:** `?kind=ingredient|product`, `?low_only=true`.
+
+```json
+{
+  "enabled": true,
+  "low_count": 3,
+  "items": [
+    { "kind": "ingredient", "id": 4, "name": "Guruch", "unit": "kg",
+      "on_hand": 12.5, "min_stock": 20.0, "is_low": true, "avg_cost": 14000.0 },
+    { "kind": "product", "id": 22, "name": "Coca-Cola 0.5", "unit": "dona",
+      "on_hand": 48.0, "min_stock": 0.0, "is_low": false,
+      "product_type": "resale", "avg_cost": 7000.0 }
+  ]
+}
+```
+
+- `enabled` — ombor moduli yoqilganmi (`settings.enable_inventory`).
+- Xomashyo uchun `is_low` = `min_stock` ga yetgan yoki tushgan.
+  Mahsulot uchun eng kam chegara sozlamasi yo'q — `is_low` faqat qoldiq
+  nol yoki manfiy bo'lganda.
+- Mahsulotlardan faqat `track_type != 0` (kuzatiladiganlari) qaytadi.
+
+#### `GET /inventory/movements`
+
+**Filtrlar:** `?start`, `?end`, `?types=IN,OUT`, `?source=ingredient|product`,
+`?item_id`, `?search`, `?limit`, `?offset`.
+
+`?limit` berilmasa ham javob **200 ta** yozuv bilan cheklanadi — harakatlar
+jurnali yillar davomida o'sadi.
+
+```json
+[
+  { "source": "ingredient", "id": 902, "item_id": 4, "item_name": "Guruch",
+    "unit": "kg", "type": "IN", "qty": 50.0, "cost_price": 14000.0,
+    "supplier": "Bozor", "note": null, "reason": null,
+    "created_at": "2026-08-20T08:30:00.000", "user_name": "Admin" }
+]
+```
+
+> ⚠️ Ombor **faqat o'qish** uchun ochiq. Kirim/chiqim yozish ataylab
+> qo'shilmagan: u tannarx hisobini o'zgartiradi va telefonda xato bosish oson.
+
+---
+
+### 5.9. ⚙️ Sozlamalar
 
 #### `GET /settings`
 
@@ -517,7 +699,7 @@ auto_confirm_order, enable_inventory
 
 ---
 
-### 5.9. 🖼 Rasmlar
+### 5.10. 🖼 Rasmlar
 
 | Metod | Yo'l | Ta'rif |
 |---|---|---|
@@ -582,7 +764,7 @@ Bular hujjatlangan, chunki mijoz ilovasi ularni hisobga olishi kerak:
 |---|---|---|
 | **HTTP (TLS yo'q)** | Bir tarmoqdagi qurilma trafikni o'qishi mumkin. Kafe ichki Wi-Fi'sini mehmonlar tarmog'idan ajrating. | Self-signed TLS |
 | **PIN'lar bazada ochiq matnda** | Bazaga fizik kirish = PIN'lar oshkor | PIN hash (bcrypt) |
-| **Pagination yo'q** | `GET /transactions`, `/reports/orders` butun tarixni qaytaradi — bir yillik kafeda javob katta bo'ladi | `?limit`/`?offset` |
+| ~~Pagination yo'q~~ | ✅ v2.1 da qo'shildi (§1). Qolgan endpoint'lar (`/products`, `/waiters`) sahifalanmaydi — ular kichik jadvallar | — |
 | **API versiyalash yo'q** | Yo'llar `/v1/` prefiksisiz | `/v1/` joriy qilish |
 | **WebSocket'da token tekshirilmaydi** | Kanal faqat "nimadir o'zgardi" signalini yuboradi (ID'lardan boshqa ma'lumot yo'q), shuning uchun xavf past | Query-token bilan tekshirish |
 | **Rate limit faqat login'da** | Boshqa endpoint'lar cheklanmagan | Umumiy rate limit |
@@ -590,6 +772,26 @@ Bular hujjatlangan, chunki mijoz ilovasi ularni hisobga olishi kerak:
 ---
 
 ## 9. O'zgarishlar tarixi
+
+### v2.1 — 2026-08-20 · admin mobil ilovasi uchun
+
+**Buzuvchi o'zgarish yo'q.** Barcha mavjud endpoint'lar avvalgidek ishlaydi.
+
+- **Sahifalash** (§1) — `?limit`/`?offset`. Ixtiyoriy: `?limit` berilmasa
+  javob shakli o'zgarmaydi, ya'ni desktop mijoz ta'sirlanmaydi.
+  Qo'llanildi: `/orders`, `/reports/orders`, `/transactions`, `/customers`,
+  `/expenses`, `/inventory/movements`.
+- **`GET /admin/dashboard`** — mobil bosh ekrani uchun bitta so'rov:
+  bugungi/kechagi ko'rsatkichlar, zal holati, ochiq buyurtmalar, top
+  mahsulotlar, faol smena, kam qolgan xomashyo. Ilgari bu 6 ta so'rov edi.
+- **`GET /admin/shift/current`** — joriy smena va kassa holati.
+- **`GET /orders`** — buyurtmalar ro'yxati filtrlar bilan (ochiq buyurtmalar
+  ham). Ofitsiantga ochiq, lekin u faqat o'zinikini ko'radi.
+- **`GET /inventory/stock`**, **`GET /inventory/movements`** — ombor
+  tarmoqqa birinchi marta chiqdi (faqat o'qish).
+- `GET /customers` — `?search` (ism yoki telefon) qo'shildi.
+- `/admin/*` va `/inventory/*` ofitsiantlar uchun yopiq.
+- `test/api_admin_test.dart` — 15 ta test (haqiqiy HTTP server orqali).
 
 ### v2.0 — 2026-08-18
 

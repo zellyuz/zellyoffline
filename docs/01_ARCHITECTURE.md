@@ -86,15 +86,14 @@ kerak.**
 
 | Fayl | Satr | Muammo |
 |------|-----:|--------|
-| `api_server.dart` | 2 830 | Barcha endpoint bitta faylda |
+| ~~`api_server.dart`~~ | ~~2 830~~ | ✅ bo'lindi — §4.7 |
 | `pos_screen.dart` | 2 422 | UI + business logic + SQL aralash |
 | `printing_service.dart` | 2 221 | Har xil chek turlari bitta klassda |
 | `database_helper.dart` | 2 176 | 60 jadval + migratsiya + failsafe hack |
 | `cart_provider.dart` | 2 043 | Savat + to'lov + chop etish + SQL |
 
 **Tavsiya:**
-- `api_server.dart` → route'larni modul bo'yicha bo'lish
-  (`routes/auth_routes.dart`, `routes/order_routes.dart`, ...).
+- ~~`api_server.dart` → route'larni modul bo'yicha bo'lish~~ ✅ bajarildi (§4.7).
 - `pos_screen.dart` → kichik widget'larga va logika provider/servicega.
 - `printing_service.dart` → `ReceiptBuilder`, `ShiftReportBuilder` kabi
   alohida klasslarga.
@@ -253,16 +252,70 @@ qo'lda va nomuvofiq bajarilgan, ko'p endpoint umuman tekshirmagan edi.
 (cross-cutting concern tarqoq edi). Endi u middleware — bitta joyda,
 testlanadigan va unutib bo'lmaydigan.
 
+## 4.7. Bajarilgan ishlar (`api_server.dart` bo'lindi) — 2026-08-20 ✅
+
+> 3 097 satrli `api_server.dart` **16 faylga** bo'lindi. Eng katta qolgan
+> fayl — 612 satr, va u HTML shabloni emas, haqiqiy logika.
+
+**Yangi tuzilma:**
+
+```
+lib/core/server/
+├── api_server.dart          94   ← faqat yig'uvchi: pipeline + route registratsiya
+├── api_context.dart        130   ← umumiy helper'lar (sarlavha, sessiya, ruxsat)
+├── auth_token_service.dart 304   (o'zgarmadi)
+├── websocket_manager.dart   74   (o'zgarmadi)
+├── middleware/
+│   ├── auth_middleware.dart 39
+│   └── cors_middleware.dart 19
+├── routes/
+│   ├── auth_routes.dart    187   /auth/*
+│   ├── table_routes.dart   114   /locations, /tables
+│   ├── catalog_routes.dart 117   /products, /categories, /printers, /settings
+│   ├── staff_routes.dart   121   /waiters, /users
+│   ├── finance_routes.dart 151   /expenses, /customers, /transactions
+│   ├── order_routes.dart   612   /orders/*, /tables/merge
+│   ├── report_routes.dart  484   /reports/*
+│   ├── media_routes.dart    48   /upload/image, /uploads/<name>
+│   └── print_routes.dart   196   /print_job, /print_receipt
+└── views/
+    └── mobile_report_html.dart 1002  ← statik HTML (Dart logikasi yo'q)
+```
+
+**Qanday bo'lindi:**
+- Har bir route moduli — `static void register(Router router)` bo'lgan klass.
+  `ApiServer._setupRoutes()` ularni ketma-ket chaqiradi, boshqa hech nima
+  qilmaydi.
+- Endpoint'lar ichidagi kod **o'zgartirilmadi** — faqat ko'chirildi va
+  `_jsonHeaders` → `ApiContext.jsonHeaders` kabi havolalar yangilandi.
+- Umumiy helper'lar (`jsonHeaders`, `sessionOf`, `requireStaff`,
+  `requirePermission`, `clientKey`, `getImagesDir`, `inventoryEnabled`,
+  `isPublicPath`, `isStaffOnlyPath`) → `ApiContext`.
+- Middleware'lar (`authMiddleware`, `corsMiddleware`) — alohida fayllarga,
+  test qilish oson bo'lishi uchun.
+- 995 satrlik HTML qatori (`_mobileReportHtml`) → `views/` ga. Bu yolg'iz
+  o'zi faylning uchdan birini egallardi.
+
+**Tekshirildi:** 53 ta REST route + `/ws` — ro'yxat aynan bir xil (avtomatik
+solishtirildi); route tanalari va HTML bayt-ma-bayt o'zgarmagan;
+`flutter analyze` — 0 xato; `flutter test` — 68/68 o'tdi.
+
+**Tashqi API o'zgarmadi:** `ApiServer.start(port)` / `ApiServer.stop()` —
+`connectivity_provider` faqat shularni ishlatadi.
+
+---
+
 ## 5. Ustuvor qadamlar (arxitektura)
 
 1. ~~Data layer namunasi~~ ✅
 2. ~~Data layer'ni barcha domenlarga tarqatish~~ ✅
 3. ~~API autentifikatsiya qatlami~~ ✅ (2026-08-18)
-4. **God file'larni bo'lish** — `api_server` (2 900+), `pos_screen` (2 400+),
-   `printing_service` (2 200+), `database_helper` (2 500+). ← keyingi ish
-5. `cart_provider`dan `BuildContext`ni butunlay olib tashlash — qolgan
+4. ~~`api_server.dart` ni modullarga bo'lish~~ ✅ (2026-08-20)
+5. **Qolgan god file'lar** — `pos_screen` (2 400+), `printing_service`
+   (2 200+), `database_helper` (2 500+). ← keyingi ish
+6. `cart_provider`dan `BuildContext`ni butunlay olib tashlash — qolgan
    10 ta `use_build_context_synchronously` warning aynan shundan.
-6. `database_helper`ni `schema/` + `migrations/` fayllariga ajratish.
-7. `lib/repositories/` → `lib/data/repositories/` ga birlashtirish.
+7. `database_helper`ni `schema/` + `migrations/` fayllariga ajratish.
+8. `lib/repositories/` → `lib/data/repositories/` ga birlashtirish.
 
 Batafsil bosqichli reja: [`04_ROADMAP.md`](04_ROADMAP.md).

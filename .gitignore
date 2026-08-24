@@ -60,3 +60,12 @@ license.json
 *.jks
 secrets.json
 .claude/worktrees/
+
+# Relay — maxfiy token va loglar (namuna: deploy/frpc.example.toml)
+deploy/frpc.toml
+deploy/frpc.local.toml
+deploy/*.log
+frpc.log
+
+# FRP binarlari (uchinchi tomon, 36MB)
+frp_*_windows_amd64/

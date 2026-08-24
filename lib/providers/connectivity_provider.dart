@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import '../core/server/api_server.dart';
 import '../core/server/websocket_manager.dart';
 import '../core/services/ws_client_service.dart';
+import '../core/services/relay_service.dart';
 import '../core/services/tunnel_service.dart';
 import '../models/order.dart';
 import 'package:path/path.dart' as p;
@@ -120,6 +121,9 @@ class ConnectivityProvider extends ChangeNotifier {
       if (success != '0.0.0.0') {
         _serverIp = success;
       }
+      // Barqaror domen (sozlangan bo'lsa) — Telegram WebApp havolasi
+      // shundan olinadi. Cloudflare tunneli zaxira sifatida qoladi.
+      RelayService.instance.start(_port);
       TunnelService.instance.start(_port);
     }
     notifyListeners();
@@ -127,6 +131,7 @@ class ConnectivityProvider extends ChangeNotifier {
 
   void stopServer() {
     ApiServer.stop();
+    RelayService.instance.stop();
     TunnelService.instance.stop();
     _isServerRunning = false;
     notifyListeners();

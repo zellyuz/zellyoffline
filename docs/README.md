@@ -10,6 +10,8 @@ Kod tahlili asosida tuzilgan (2026-08-07).
 | [02_CODE_QUALITY.md](02_CODE_QUALITY.md) | Linting (393 issue), kod sifati, texnik qarz |
 | [03_SECURITY.md](03_SECURITY.md) | Xavfsizlik topilmalari (⚠️ kritik: git'dagi maxfiy kalit) |
 | [04_ROADMAP.md](04_ROADMAP.md) | Global standartlarga bosqichma-bosqich o'tish rejasi |
+| [05_MOBIL_FILIAL_SYNC.md](05_MOBIL_FILIAL_SYNC.md) | **Mobil ilova · ko'p filiallik · online/offline sync** — arxitektura va Roadmap ([taklif.md](taklif.md) ga javob) |
+| [06_ADMIN_APP_API.md](06_ADMIN_APP_API.md) | **Admin mobil ilovasi — API spetsifikatsiyasi**: ekran→endpoint xaritasi, yetishmayotgan endpoint'lar, MVP bosqichlari |
 | [ombor.md](ombor.md) | Omborxona moduli — asl g'oya (foydalanuvchi yozgan) |
 | [ombor_tahlil.md](ombor_tahlil.md) | Omborxona modulining chuqur tahlili |
 | [ombor_final.md](ombor_final.md) | **Omborxona — YAKUNIY, kodga tayyor spetsifikatsiya** (DB + oqim + refaktor) |

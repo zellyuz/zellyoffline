@@ -1,0 +1,55 @@
+# Zelly POS — relay mijozi (kafedagi Windows kompyuterda)
+#
+# Bu fayl POS kompyuterida `frpc.exe` yonida turadi. POS serverga O'ZI
+# ulanadi — kafeda oq IP, port forwarding yoki router sozlash KERAK EMAS.
+#
+# Ishga tushirish (qo'lda tekshirish uchun):
+#   frpc.exe -c frpc.toml
+#
+# Ilova ichidan: RelayService `TunnelService` naqshi bo'yicha
+# Process.start(frpcPath, ['-c', configPath]) qiladi.
+
+# ⚠️ 443 orqali, to'g'ridan-to'g'ri frp portiga EMAS.
+# Provayder va kafe tarmoqlari 22/80/443 dan boshqa portlarni bloklaydi —
+# 5.104.108.235:7000 ga ulanish "i/o timeout" beradi (tekshirilgan).
+serverAddr = "mehmon.zelly.uz"
+serverPort = 443
+transport.protocol = "wss"
+
+# Token serverdan: ssh zelly "cat /etc/frp/token"
+# Har filialda bir xil. Bu faylni git'ga QO'YMANG.
+auth.method = "token"
+auth.token  = "TOKEN_SHU_YERGA"   # ssh zelly "cat /etc/frp/token"
+
+# Aloqa uzilsa avtomatik qayta ulanadi
+loginFailExit = false
+
+log.to      = "frpc.log"
+log.level   = "info"
+log.maxDays = 7
+
+transport.tcpMux            = true
+transport.poolCount         = 3
+transport.heartbeatInterval = 20
+transport.heartbeatTimeout  = 60
+
+[[proxies]]
+name = "zelly-pos-a1"
+type = "http"
+
+# DNS da wildcard (*.mehmon) yozuvi YO'Q, shuning uchun `subdomain` emas,
+# aniq domen ishlatiladi. Natija: https://mehmon.zelly.uz
+customDomains = ["mehmon.zelly.uz"]
+
+# Ikkinchi filial qo'shilganda:
+#   1) ahost.uz da yangi A yozuv:  a2.mehmon → 5.104.108.235
+#   2) shu yerda:  customDomains = ["a2.mehmon.zelly.uz"]
+# Yoki wildcard (*.mehmon) qo'shilsa — `subdomain = "a2"` yetarli
+# (frps da subdomainHost allaqachon sozlangan).
+
+# POS ilovasining lokal API porti (Sozlamalar → Tarmoq, standart 8080)
+localIP   = "127.0.0.1"
+localPort = 8080
+
+# Trafikni siqish — sekin internetda hisobotlar tezroq keladi
+transport.useCompression = true
