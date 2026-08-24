@@ -23,8 +23,10 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; Asosiy exe
 Source: "C:\Users\Muhammadi\Zelly\tezzro\build\windows\x64\runner\Release\tezzro.exe"; DestDir: "{app}"; Flags: ignoreversion
-; Barcha DLL va qo'shimcha fayllar
-Source: "C:\Users\Muhammadi\Zelly\tezzro\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Barcha DLL va qo'shimcha fayllar (frpc.exe ham shu yerdan keladi).
+; Excludes: ishlab chiqish paytida Release papkasida qolgan loglar va
+; lokal sozlamalar mijozga ketmasin (masalan frpc.log — relay tunnel logi).
+Source: "C:\Users\Muhammadi\Zelly\tezzro\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Excludes: "*.log,frpc.toml,license.json"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Versiya fayli — auto-update uchun MUHIM, bo'lmasa yangilanish ishlamaydi
 Source: "C:\Users\Muhammadi\Zelly\tezzro\version.txt"; DestDir: "{app}"; Flags: ignoreversion
 
