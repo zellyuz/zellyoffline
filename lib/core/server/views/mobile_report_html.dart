@@ -517,9 +517,16 @@ function otBdg(t){
 // ── API ───────────────────────────────────────────────────────────────────────
 async function apig(path){
   var r=await fetch(path,{headers:{'Authorization':'Bearer '+T}});
-  if(r.status===401){ doLogout(); throw new Error('unauth'); }
+  if(r.status===401){ doLogout(await srvErr(r)); throw new Error('unauth'); }
   if(!r.ok) throw new Error('HTTP '+r.status);
   return r.json();
+}
+
+// Serverning xato matni. U sababni aniq aytadi (token boshqa kassaniki,
+// muddati tugagan...), shuning uchun uni o'z umumiy matnimiz bilan
+// almashtirmaymiz — foydalanuvchi nima qilishni bilishi kerak.
+async function srvErr(r){
+  try{ var d=await r.json(); return (d&&d.error)||''; }catch(e){ return ''; }
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
@@ -934,16 +941,20 @@ async function doLogin(){
     var r=await fetch('/auth/login',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:pin})});
     var d=await r.json();
-    if(!r.ok){ $e('perr').textContent=(d&&d.message)||"PIN noto'g'ri"; return; }
+    // Server maydonni `error` deb yuboradi — `message` hech qachon
+    // to'lmagan, shuning uchun 429 (juda ko'p urinish) ham "PIN noto'g'ri"
+    // bo'lib ko'rinardi.
+    if(!r.ok){ $e('perr').textContent=(d&&(d.error||d.message))||"PIN noto'g'ri"; return; }
     T=d.token; sessionStorage.setItem('_zt',T); await showApp();
   }catch(e){ $e('perr').textContent="Serverga ulanib bo'lmadi"; }
   finally{ $e('lbtn').disabled=false; }
 }
 
-function doLogout(){
+function doLogout(msg){
   sessionStorage.removeItem('_zt'); T=null;
   $e('login').style.display=''; $e('app').style.display='none';
   $e('pin').value=''; clearInterval(_tmr);
+  $e('perr').textContent=msg||'';
 }
 
 async function showApp(){
@@ -992,7 +1003,11 @@ $e('logout-btn').addEventListener('click',function(){
 
 if(T){
   fetch('/auth/me',{headers:{'Authorization':'Bearer '+T}})
-    .then(function(r){ if(r.ok) showApp(); else doLogout(); })
+    .then(function(r){
+      if(r.ok) return showApp();
+      // Saqlangan token bu serverga yaramadi — sababini ko'rsatamiz.
+      return srvErr(r).then(doLogout);
+    })
     .catch(function(){ doLogout(); });
 }
 </script>

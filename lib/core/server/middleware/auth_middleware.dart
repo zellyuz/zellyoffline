@@ -16,13 +16,16 @@ Middleware authMiddleware() {
         return innerHandler(request);
       }
 
-      final session = await AuthTokenService.instance.resolve(
+      final result = await AuthTokenService.instance.authenticate(
         request.headers['Authorization'],
       );
+      final session = result.session;
       if (session == null) {
-        return ApiContext.unauthorized(
-          'Token yaroqsiz yoki muddati tugagan. Qaytadan kiring.',
-        );
+        // Sabab aniq aytiladi: "muddati tugagan" degan umumiy xabar eng ko'p
+        // uchraydigan holatni (boshqa kassaning tokeni) yashirib, domen yoki
+        // litsenziyani qidirishga majbur qilardi.
+        final reason = result.reason ?? AuthFailure.missingToken;
+        return ApiContext.unauthorized(reason.message, code: reason.code);
       }
 
       if (session.isWaiter && ApiContext.isStaffOnlyPath(request.url.path)) {

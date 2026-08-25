@@ -287,12 +287,30 @@ class ConnectivityProvider extends ChangeNotifier {
   bool _sessionExpired = false;
   bool get sessionExpired => _sessionExpired;
 
-  void _handleUnauthorized() {
+  /// [responseBody] — serverning 401 javobi. Undagi `error` matni sababni
+  /// aniq aytadi ("bu token boshqa kassaniki", "muddati tugagan"), shuning
+  /// uchun uni o'z umumiy matnimiz bilan almashtirmaymiz.
+  void _handleUnauthorized([String? responseBody]) {
     if (_authToken == null) return;
     _authToken = null;
     _sessionExpired = true;
-    _lastError = 'Sessiya muddati tugadi. Qaytadan kiring.';
+    _lastError =
+        _serverError(responseBody) ??
+        'Sessiya muddati tugadi. Qaytadan kiring.';
     notifyListeners();
+  }
+
+  static String? _serverError(String? body) {
+    if (body == null || body.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['error'] is String) {
+        return decoded['error'] as String;
+      }
+    } catch (_) {
+      // JSON emas (nginx/relay xatosi) — umumiy matnga qaytamiz.
+    }
+    return null;
   }
 
   void clearSessionExpiredFlag() {
@@ -332,7 +350,7 @@ class ConnectivityProvider extends ChangeNotifier {
       if (response.statusCode == 200) {
         return List<Map<String, dynamic>>.from(jsonDecode(response.body));
       }
-      if (response.statusCode == 401) _handleUnauthorized();
+      if (response.statusCode == 401) _handleUnauthorized(response.body);
     } catch (e) {
       debugPrint('Remote Data Error: $e');
     }
@@ -351,7 +369,7 @@ class ConnectivityProvider extends ChangeNotifier {
             },
           )
           .timeout(const Duration(seconds: 5));
-      if (response.statusCode == 401) _handleUnauthorized();
+      if (response.statusCode == 401) _handleUnauthorized(response.body);
       return response.statusCode == 200;
     } catch (e) {
       debugPrint('Post Remote Data Error: $e');
@@ -386,7 +404,7 @@ class ConnectivityProvider extends ChangeNotifier {
             headers: {'Authorization': 'Bearer $_authToken'},
           )
           .timeout(const Duration(seconds: 5));
-      if (response.statusCode == 401) _handleUnauthorized();
+      if (response.statusCode == 401) _handleUnauthorized(response.body);
       return response.statusCode == 200;
     } catch (e) {
       debugPrint('Delete Remote Data Error: $e');

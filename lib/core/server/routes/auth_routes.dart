@@ -145,7 +145,10 @@ class AuthRoutes {
       try {
         final session = ApiContext.sessionOf(request);
         if (session == null) {
-          return ApiContext.unauthorized('Token topilmadi');
+          return ApiContext.unauthorized(
+          AuthFailure.missingToken.message,
+          code: AuthFailure.missingToken.code,
+        );
         }
 
         final db = await DatabaseHelper.instance.database;

@@ -49,6 +49,56 @@ class ApiSession {
   };
 }
 
+/// Autentifikatsiya nima uchun rad etilgani.
+///
+/// Ilgari uchala holat bitta "Token yaroqsiz yoki muddati tugagan" xabariga
+/// tushardi. Amalda esa ular butunlay boshqa muammolar va foydalanuvchining
+/// keyingi qadami ham boshqacha — masalan [unknownToken] da domen yoki
+/// internetni tekshirish mutlaqo befoyda, faqat qayta kirish kerak.
+enum AuthFailure {
+  /// `Authorization: Bearer <token>` sarlavhasi yo'q yoki noto'g'ri shaklda.
+  missingToken,
+
+  /// Token bu kompyuterning bazasida yo'q — boshqa kassada olingan,
+  /// ilova qayta o'rnatilgan yoki sessiya bekor qilingan.
+  unknownToken,
+
+  /// Token shu kompyuterniki, lekin muddati o'tgan.
+  expired,
+}
+
+extension AuthFailureMessage on AuthFailure {
+  /// Mijozga ko'rsatiladigan matn. Nima bo'lganini **va** nima qilish
+  /// kerakligini aytadi.
+  String get message => switch (this) {
+    AuthFailure.missingToken =>
+      'Kirish tokeni yuborilmadi. PIN kod bilan qaytadan kiring.',
+    AuthFailure.unknownToken =>
+      'Bu token shu kassaga tegishli emas — u boshqa kompyuterda olingan '
+          'yoki ilova qaytadan o\'rnatilgan. Chiqib, shu kassaning PIN kodi '
+          'bilan qaytadan kiring.',
+    AuthFailure.expired =>
+      'Sessiya muddati tugagan (12 soat). PIN kod bilan qaytadan kiring.',
+  };
+
+  /// Mijoz dasturiy tarzda ajratishi uchun barqaror kod.
+  String get code => switch (this) {
+    AuthFailure.missingToken => 'no_token',
+    AuthFailure.unknownToken => 'unknown_token',
+    AuthFailure.expired => 'token_expired',
+  };
+}
+
+/// Tekshiruv natijasi: sessiya **yoki** rad etish sababi.
+class AuthResult {
+  const AuthResult({this.session, this.reason});
+
+  final ApiSession? session;
+  final AuthFailure? reason;
+
+  bool get isAuthenticated => session != null;
+}
+
 class AuthTokenService {
   AuthTokenService._();
   static final AuthTokenService instance = AuthTokenService._();
@@ -120,10 +170,26 @@ class AuthTokenService {
   }
 
   /// `Authorization: Bearer <token>` sarlavhasidan sessiyani topadi.
-  Future<ApiSession?> resolve(String? authHeader) async {
+  ///
+  /// Xato sababi kerak bo'lsa [authenticate] dan foydalaning — bu metod
+  /// faqat "bor/yo'q" javobini beradi.
+  Future<ApiSession?> resolve(String? authHeader) async =>
+      (await authenticate(authHeader)).session;
+
+  /// [resolve] bilan bir xil, lekin **nega** rad etilganini ham qaytaradi.
+  ///
+  /// Sabab muhim: eng ko'p uchraydigan holat — token haqiqatan eskirgani
+  /// emas, balki uni **boshqa kassa** bergani. Sessiyalar har kompyuterning
+  /// o'z SQLite bazasida (`api_sessions`) yashaydi va ko'chma emas. Umumiy
+  /// "token yaroqsiz yoki muddati tugagan" xabari bu holatda foydalanuvchini
+  /// noto'g'ri yo'ldan olib borardi — u sabab domen yoki litsenziyada deb
+  /// o'ylardi.
+  Future<AuthResult> authenticate(String? authHeader) async {
     final token = extractToken(authHeader);
-    if (token == null) return null;
-    return validate(token);
+    if (token == null) {
+      return const AuthResult(reason: AuthFailure.missingToken);
+    }
+    return validateDetailed(token);
   }
 
   static String? extractToken(String? authHeader) {
@@ -134,15 +200,19 @@ class AuthTokenService {
     return token.isEmpty ? null : token;
   }
 
-  Future<ApiSession?> validate(String token) async {
+  Future<ApiSession?> validate(String token) async =>
+      (await validateDetailed(token)).session;
+
+  /// [validate] ning rad etish sababini ham qaytaradigan varianti.
+  Future<AuthResult> validateDetailed(String token) async {
     final cached = _cache[token];
     if (cached != null && !cached.isExpired) {
       await _touch(token);
-      return _cache[token];
+      return AuthResult(session: _cache[token]);
     }
     if (cached != null) {
       await revoke(token);
-      return null;
+      return const AuthResult(reason: AuthFailure.expired);
     }
 
     final db = await _db();
@@ -152,7 +222,11 @@ class AuthTokenService {
       whereArgs: [token],
       limit: 1,
     );
-    if (rows.isEmpty) return null;
+    // Bu bazada bunday token umuman uchramadi: boshqa kassaning tokeni,
+    // ilova qayta o'rnatilgan yoki sessiya bekor qilingan.
+    if (rows.isEmpty) {
+      return const AuthResult(reason: AuthFailure.unknownToken);
+    }
 
     final row = rows.first;
     final expiresAt = DateTime.fromMillisecondsSinceEpoch(
@@ -160,7 +234,7 @@ class AuthTokenService {
     );
     if (DateTime.now().isAfter(expiresAt)) {
       await revoke(token);
-      return null;
+      return const AuthResult(reason: AuthFailure.expired);
     }
 
     final permsStr = (row['permissions'] ?? '').toString();
@@ -173,7 +247,7 @@ class AuthTokenService {
     );
     _cache[token] = session;
     await _touch(token);
-    return _cache[token];
+    return AuthResult(session: _cache[token]);
   }
 
   Future<void> _touch(String token) async {
@@ -202,6 +276,16 @@ class AuthTokenService {
       );
     } catch (e) {
       AppLogger.w(_logTag, 'Sessiya yangilanmadi', e);
+    }
+  }
+
+  /// Faqat test uchun: xotiradagi keshni tashlab, tekshiruvni bazaga
+  /// tayanishga majbur qiladi.
+  void dropCache([String? token]) {
+    if (token == null) {
+      _cache.clear();
+    } else {
+      _cache.remove(token);
     }
   }
 

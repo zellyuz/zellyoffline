@@ -723,7 +723,7 @@ auto_confirm_order, enable_inventory
 |---|---|---|
 | `200` | Muvaffaqiyat | — |
 | `400` | Noto'g'ri so'rov yoki biznes qoidasi buzildi (masalan, stol allaqachon band) | Xabarni foydalanuvchiga ko'rsating |
-| `401` | Token yo'q, yaroqsiz yoki muddati tugagan | **Login ekraniga qaytaring** va qayta kiring |
+| `401` | Token yo'q, begona yoki muddati tugagan (`code` ga qarang) | **Login ekraniga qaytaring**, javobdagi `error` matnini ko'rsating |
 | `403` | Kirdingiz, lekin huquqingiz yetmaydi | Amalni bloklang, sababni ko'rsating |
 | `404` | Obyekt topilmadi | — |
 | `409` | Ombor qoldig'i yetmaydi | Buyurtma tasdiqlanmadi, foydalanuvchiga ayting |
@@ -733,6 +733,26 @@ auto_confirm_order, enable_inventory
 **Xato javobi formati** (barcha kodlar uchun bir xil):
 ```json
 { "error": "Tushunarli xabar" }
+```
+
+### `401` ning sabablari
+
+`401` javobida qo'shimcha `code` maydoni keladi. Matn o'zgarishi mumkin,
+`code` esa barqaror — mijoz shunga qarab qaror qilsin:
+
+| `code` | Sabab | Foydalanuvchiga nima demoq kerak |
+|---|---|---|
+| `no_token` | `Authorization` sarlavhasi yo'q yoki noto'g'ri shaklda | Qaytadan kiring |
+| `unknown_token` | Token bu kassaning bazasida yo'q: **boshqa kompyuterda olingan**, ilova qayta o'rnatilgan yoki sessiya bekor qilingan | Chiqib, **shu kassaning** PIN kodi bilan kiring |
+| `token_expired` | Token shu kassaniki, lekin 12 soat o'tgan | Qaytadan kiring |
+
+> `unknown_token` — relay domenini boshqa kompyuterga ko'chirganda eng ko'p
+> uchraydigan holat. Sessiyalar har kompyuterning o'z SQLite bazasida
+> (`api_sessions`) yashaydi va ko'chma emas. Bu **domen yoki litsenziya
+> muammosi emas** — telefondagi eski tokenni tashlab, qayta kirish kifoya.
+
+```json
+{ "error": "Bu token shu kassaga tegishli emas — ...", "code": "unknown_token" }
 ```
 
 ---

@@ -82,6 +82,50 @@ void main() {
       expect(await auth.resolve('Bearer ${first.token}'), isNull);
       expect(await auth.resolve('Bearer ${second.token}'), isNull);
     });
+
+    // Eng ko'p uchraydigan real holat: kassa boshqa kompyuterga ko'chirilgan
+    // yoki ilova qayta o'rnatilgan. Sessiyalar har kompyuterning o'z
+    // bazasida yashaydi, shuning uchun eski token bu yerda umuman topilmaydi
+    // — u "eskirgan" emas, "begona". Xabar shuni aytishi kerak.
+    test('begona token muddat tugashi bilan chalkashtirilmaydi', () async {
+      final unknown = await auth.authenticate('Bearer boshqa-kassaning-tokeni');
+      expect(unknown.isAuthenticated, isFalse);
+      expect(unknown.reason, AuthFailure.unknownToken);
+      expect(unknown.reason!.code, 'unknown_token');
+      expect(unknown.reason!.message, contains('boshqa kompyuterda'));
+
+      final missing = await auth.authenticate(null);
+      expect(missing.reason, AuthFailure.missingToken);
+      expect(missing.reason!.code, 'no_token');
+    });
+
+    test('muddati o\'tgan token expired sababini beradi', () async {
+      final session = await auth.issue(
+        userId: 11,
+        role: 'admin',
+        permissions: const [],
+      );
+
+      // Bazadagi muddatni o'tmishga surib, keshni tozalaymiz — shunda
+      // tekshiruv bazadagi yozuvga tayanadi.
+      final db = await DatabaseHelper.instance.database;
+      await db.update(
+        'api_sessions',
+        {
+          'expires_at': DateTime.now()
+              .subtract(const Duration(hours: 1))
+              .millisecondsSinceEpoch,
+        },
+        where: 'token = ?',
+        whereArgs: [session.token],
+      );
+      auth.dropCache(session.token);
+
+      final result = await auth.authenticate('Bearer ${session.token}');
+      expect(result.isAuthenticated, isFalse);
+      expect(result.reason, AuthFailure.expired);
+      expect(result.reason!.code, 'token_expired');
+    });
   });
 
   group('Ruxsatlar', () {

@@ -60,10 +60,13 @@ class ApiContext {
   static ApiSession? sessionOf(Request request) =>
       request.context[sessionKey] as ApiSession?;
 
-  static Response unauthorized(String message) => Response.unauthorized(
-    jsonEncode({'error': message}),
-    headers: jsonHeaders,
-  );
+  /// [code] — mijoz matnga qarab emas, barqaror kalitga qarab qaror qilishi
+  /// uchun (`unknown_token`, `token_expired`, `no_token`).
+  static Response unauthorized(String message, {String? code}) =>
+      Response.unauthorized(
+        jsonEncode({'error': message, 'code': ?code}),
+        headers: jsonHeaders,
+      );
 
   static Response forbidden(String message) => Response.forbidden(
     jsonEncode({'error': message}),
@@ -74,7 +77,12 @@ class ApiContext {
   /// Qaytgan qiymat `null` bo'lsa — ruxsat bor.
   static Response? requireStaff(Request request) {
     final session = sessionOf(request);
-    if (session == null) return unauthorized('Token topilmadi');
+    if (session == null) {
+      return unauthorized(
+        AuthFailure.missingToken.message,
+        code: AuthFailure.missingToken.code,
+      );
+    }
     if (session.isWaiter) {
       return forbidden('Bu amal uchun administrator huquqi kerak');
     }
@@ -85,7 +93,12 @@ class ApiContext {
   /// `change_table`, `edit_price` ...). Admin/kassirga hamma narsa ochiq.
   static Response? requirePermission(Request request, String permission) {
     final session = sessionOf(request);
-    if (session == null) return unauthorized('Token topilmadi');
+    if (session == null) {
+      return unauthorized(
+        AuthFailure.missingToken.message,
+        code: AuthFailure.missingToken.code,
+      );
+    }
     if (!session.can(permission)) {
       return forbidden('Sizda "$permission" huquqi yo\'q');
     }

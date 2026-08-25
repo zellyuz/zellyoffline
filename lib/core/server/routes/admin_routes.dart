@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../../../repositories/shift_repository.dart';
 import '../../database_helper.dart';
 import '../api_context.dart';
+import '../auth_token_service.dart';
 import '../pagination.dart';
 
 /// Admin (mobil) ilovasi uchun endpoint'lar.
@@ -29,7 +30,12 @@ class AdminRoutes {
     router.get('/orders', (Request request) async {
       try {
         final session = ApiContext.sessionOf(request);
-        if (session == null) return ApiContext.unauthorized('Token topilmadi');
+        if (session == null) {
+          return ApiContext.unauthorized(
+            AuthFailure.missingToken.message,
+            code: AuthFailure.missingToken.code,
+          );
+        }
 
         final q = request.url.queryParameters;
         final page = Pagination.of(request);
